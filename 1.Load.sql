@@ -1,4 +1,10 @@
 
+drop table if exists ilinet_visits;
+drop table if exists clinical_labs;
+drop table if exists combined_labs;
+drop table if exists nyt_cases;
+drop table if exists census_population;
+
 create table ilinet_visits (
     -- REGION TYPE
     region_type text,
@@ -34,6 +40,9 @@ create table ilinet_visits (
     primary key (region, year, week)
 );
 
+-- After 2015, flu testing data is reported separately for clinical labs and public health labs.
+-- Clinical lab data is reported by state, while public health lab data is only reported by region.
+-- Clinical labs report ~5x more samples than public health labs.
 create table clinical_labs (
     -- REGION TYPE
     region_type text,
@@ -99,7 +108,15 @@ create table nyt_cases (
     primary key (date, state)
 );
 
+create table census_population (
+    state text,
+    year integer,
+    population integer,
+    primary key (state, year)
+);
+
 copy ilinet_visits from './data/ILINet.csv' with header null 'X';
 copy clinical_labs from './data/WHO_NREVSS_Clinical_Labs.csv' with header null 'X';
 copy combined_labs from './data/WHO_NREVSS_Combined_prior_to_2015_16.csv' with header null 'X';
 copy nyt_cases from './data/NYT_Cases.csv' with header;
+copy census_population from './data/Census_Population.csv' with header;

@@ -32,11 +32,12 @@ with tests as (
     select 
         date, 
         case region when 'New York City' then 'New York' else region end as state, 
-        ili_total, 
-        num_providers, 
-        total_patients
+        sum(ili_total) as ili_total, 
+        sum(num_providers) as num_providers, 
+        sum(total_patients) as total_patients
     from ilinet_visits
     join cdc_dates using (year, week)
+    group by 1, 2
 ), cases as (
     -- Convert cumulative cases/deaths to weekly new cases/deaths
     select 
@@ -49,7 +50,9 @@ with tests as (
 )
 select 
     date as "Date", 
+    extract(year from date) - case when extract(month from date) < 8 then 1 else 0 end as "Flu Season",
     state as "State", 
+    population as "Population",
     total_specimens as "Total Flu Tests", 
     total_positive as "Positive Flu Tests", 
     total_patients as "Total Patients",
@@ -59,6 +62,8 @@ select
     coalesce(deaths, 0) as "COVID Deaths"
 from tests 
 join patients using (date, state)
+join cdc_dates using (date)
+join census_population using (year, state)
 left join cases using (date, state)
 order by state, date;
 
