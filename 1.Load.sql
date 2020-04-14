@@ -1,122 +1,144 @@
-
-drop table if exists ilinet_visits;
-drop table if exists clinical_labs;
-drop table if exists combined_labs;
-drop table if exists nyt_cases;
-drop table if exists census_population;
-
-create table ilinet_visits (
+create or replace table covid.ilinet_visits (
     -- REGION TYPE
-    region_type text,
+    region_type string,
     -- REGION
     -- Note that "New York City" is a separate region.
-    region text,
+    region string,
     -- YEAR
-    year integer,
+    year int64,
     -- WEEK
-    week integer,
+    week int64,
     -- % WEIGHTED ILI
-    weighted_ili text,
+    weighted_ili string,
     -- %UNWEIGHTED ILI
-    unweighted_ili text,
+    unweighted_ili string,
     -- AGE 0-4
-    age_0_4 text,
+    age_0_4 string,
     -- AGE 25-49
-    age_25_29 text,
+    age_25_29 string,
     -- AGE 25-64
-    age_25_64 text,
+    age_25_64 string,
     -- AGE 5-24
-    age_5_24 text,
+    age_5_24 string,
     -- AGE 50-64
-    age_50_64 text,
+    age_50_64 string,
     -- AGE 65
-    age_65 text,
+    age_65 string,
     -- ILITOTAL
-    ili_total integer,
+    ili_total int64,
     -- NUM. OF PROVIDERS
-    num_providers integer,
+    num_providers int64,
     -- TOTAL PATIENTS
-    total_patients integer,
-    primary key (region, year, week)
+    total_patients int64
 );
 
 -- After 2015, flu testing data is reported separately for clinical labs and public health labs.
 -- Clinical lab data is reported by state, while public health lab data is only reported by region.
 -- Clinical labs report ~5x more samples than public health labs.
-create table clinical_labs (
+create or replace table covid.clinical_labs (
     -- REGION TYPE
-    region_type text,
+    region_type string,
     -- REGION
-    -- Note that "New York City" is a separate region, but it always reports null.
-    region text,
+    region string,
     -- YEAR
-    year integer,
+    year int64,
     -- WEEK
-    week integer,
+    week int64,
     -- TOTAL SPECIMENS
-    total_specimens integer,
+    total_specimens int64,
     -- TOTAL A
-    total_a integer,
+    total_a int64,
     -- TOTAL B
-    total_b integer,
+    total_b int64,
     -- PERCENT POSITIVE
-    percent_positive real,
+    percent_positive float64,
     -- PERCENT A
-    percent_a real,
+    percent_a float64,
     -- PERCENT B
-    percent_b real,
-    primary key (region, year, week)
+    percent_b float64
 );
 
-create table combined_labs (
+create or replace table covid.public_health_labs (
     -- REGION TYPE
-    region_type text,
+    region_type string,
     -- REGION
-    -- Note that "New York City" is a separate region.
-    region text,
+    region string,
     -- YEAR
-    year integer,
+    year int64,
     -- WEEK
-    week integer,
+    week int64,
     -- TOTAL SPECIMENS
-    total_specimens integer,
-    -- PERCENT POSITIVE
-    percent_positive real,
+    total_specimens int64,
     -- A (2009 H1N1)
-    a_h1n1 integer,
-    -- A (H1)
-    a_h1 integer,
+    a_h1n1 int64,
     -- A (H3)
-    a_h3 integer,
+    a_h3 int64,
     -- A (Subtyping not Performed)
-    a_no_subtype integer,
-    -- A (Unable to Subtype)
-    a_unable_to_subtype integer,
+    a_no_subtype int64,
     -- B
-    b integer,
+    b int64,
+    -- BVic
+    b_yam int64,
+    -- BYam
+    b_vic int64,
     -- H3N2v
-    h3n2v integer,
-    primary key (region, year, week)
+    h3n2v int64
 );
 
-create table nyt_cases (
+create or replace table covid.combined_labs (
+    -- REGION TYPE
+    region_type string,
+    -- REGION
+    region string,
+    -- YEAR
+    year int64,
+    -- WEEK
+    week int64,
+    -- TOTAL SPECIMENS
+    total_specimens int64,
+    -- PERCENT POSITIVE
+    percent_positive float64,
+    -- A (2009 H1N1)
+    a_h1n1 int64,
+    -- A (H1)
+    a_h1 int64,
+    -- A (H3)
+    a_h3 int64,
+    -- A (Subtyping not Performed)
+    a_no_subtype int64,
+    -- A (Unable to Subtype)
+    a_unable_to_subtype int64,
+    -- B
+    b int64,
+    -- H3N2v
+    h3n2v int64
+);
+
+create or replace table covid.nyt_cases (
     date date,
-    state text,
-    fips integer,
-    cases integer,
-    deaths integer,
-    primary key (date, state)
+    state string,
+    fips int64,
+    cases int64,
+    deaths int64
 );
 
-create table census_population (
-    state text,
-    year integer,
-    population integer,
-    primary key (state, year)
+create or replace table covid.census_population (
+    state string,
+    year int64,
+    population int64
 );
 
-copy ilinet_visits from './data/ILINet.csv' with header null 'X';
-copy clinical_labs from './data/WHO_NREVSS_Clinical_Labs.csv' with header null 'X';
-copy combined_labs from './data/WHO_NREVSS_Combined_prior_to_2015_16.csv' with header null 'X';
-copy nyt_cases from './data/NYT_Cases.csv' with header;
-copy census_population from './data/Census_Population.csv' with header;
+create or replace table covid.hhs_regions (
+    region string,
+    state string
+);
+
+/*
+bq --project_id fivetran-covid load --skip_leading_rows 2 --null_marker 'X' covid.ilinet_visits './data/ILINet.csv'
+bq --project_id fivetran-covid load --skip_leading_rows 2 --null_marker 'X' covid.clinical_labs './data/WHO_NREVSS_Clinical_Labs.csv'
+bq --project_id fivetran-covid load --skip_leading_rows 2 --null_marker 'X' covid.public_health_labs './data/WHO_NREVSS_Public_Health_Labs.csv'
+bq --project_id fivetran-covid load --skip_leading_rows 2 --null_marker 'X' covid.combined_labs './data/WHO_NREVSS_Combined_prior_to_2015_16.csv'
+bq --project_id fivetran-covid load --skip_leading_rows 1 covid.nyt_cases './data/NYT_Cases.csv'
+bq --project_id fivetran-covid load --skip_leading_rows 1 covid.census_population './data/Census_Population.csv'
+bq --project_id fivetran-covid load --skip_leading_rows 1 covid.hhs_regions './data/HHS_Regions.csv'
+*/
