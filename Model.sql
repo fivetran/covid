@@ -220,20 +220,27 @@ group by 1, 2;
 /*
 Our goal is to fit the model:
 
-ili(region) ~ patients(region) * (a * seasonal_trend + b * flu_per_speciment(region1) + c * flu_per_specimen(region2) + ...)
+ili_total / total_patients ~ seasonal_trend + a * total_positive_region1 + b * total_positive_region2 + ...
+
+or
+
+ili_total ~ total_patients * (seasonal_trend + a * total_positive_region1 + b * total_positive_region2 + ...)
+
+or
+
+ili_total ~ total_patients * seasonal_trend + total_patients * a * total_positive_region1 + total_patients * b * total_positive_region2 + ...
 
 */
 
-create temp function rate(x int64, y int64) as (
-    case y when 0 then y else x / y end
-);
 create or replace table covid.features as 
 with pivot_input as (
     select
         date,
         region,
-        ili_total,
-        total_patients,
+        tests.total_specimens,
+        tests.total_positive,
+        patients.total_patients,
+        patients.ili_total,
         struct(
             total_patients * if(extract(month from date) = 1, 1, 0) as month1,
             total_patients * if(extract(month from date) = 2, 1, 0) as month2,
@@ -249,44 +256,47 @@ with pivot_input as (
             total_patients * if(extract(month from date) = 12, 1, 0) as month12
         ) as seasonal_trend,
         struct (
-            region1.positive_per_specimen as from_region1_lag0,
-            region2.positive_per_specimen as from_region2_lag0,
-            region3.positive_per_specimen as from_region3_lag0,
-            region4.positive_per_specimen as from_region4_lag0,
-            region5.positive_per_specimen as from_region5_lag0,
-            region6.positive_per_specimen as from_region6_lag0,
-            region7.positive_per_specimen as from_region7_lag0,
-            region8.positive_per_specimen as from_region8_lag0,
-            region9.positive_per_specimen as from_region9_lag0,
-            region10.positive_per_specimen as from_region10_lag0,
+            total_patients * region1.total_positive as from_region1_lag0,
+            total_patients * region2.total_positive as from_region2_lag0,
+            total_patients * region3.total_positive as from_region3_lag0,
+            total_patients * region4.total_positive as from_region4_lag0,
+            total_patients * region5.total_positive as from_region5_lag0,
+            total_patients * region6.total_positive as from_region6_lag0,
+            total_patients * region7.total_positive as from_region7_lag0,
+            total_patients * region8.total_positive as from_region8_lag0,
+            total_patients * region9.total_positive as from_region9_lag0,
+            total_patients * region10.total_positive as from_region10_lag0,
 
-            lag(region1.positive_per_specimen, 1) over weeks as from_region1_lag1,
-            lag(region2.positive_per_specimen, 1) over weeks as from_region2_lag1,
-            lag(region3.positive_per_specimen, 1) over weeks as from_region3_lag1,
-            lag(region4.positive_per_specimen, 1) over weeks as from_region4_lag1,
-            lag(region5.positive_per_specimen, 1) over weeks as from_region5_lag1,
-            lag(region6.positive_per_specimen, 1) over weeks as from_region6_lag1,
-            lag(region7.positive_per_specimen, 1) over weeks as from_region7_lag1,
-            lag(region8.positive_per_specimen, 1) over weeks as from_region8_lag1,
-            lag(region9.positive_per_specimen, 1) over weeks as from_region9_lag1,
-            lag(region10.positive_per_specimen, 1) over weeks as from_region10_lag1
-        ) as positive_per_specimen
+            total_patients * lag(region1.total_positive, 1) over weeks as from_region1_lag1,
+            total_patients * lag(region2.total_positive, 1) over weeks as from_region2_lag1,
+            total_patients * lag(region3.total_positive, 1) over weeks as from_region3_lag1,
+            total_patients * lag(region4.total_positive, 1) over weeks as from_region4_lag1,
+            total_patients * lag(region5.total_positive, 1) over weeks as from_region5_lag1,
+            total_patients * lag(region6.total_positive, 1) over weeks as from_region6_lag1,
+            total_patients * lag(region7.total_positive, 1) over weeks as from_region7_lag1,
+            total_patients * lag(region8.total_positive, 1) over weeks as from_region8_lag1,
+            total_patients * lag(region9.total_positive, 1) over weeks as from_region9_lag1,
+            total_patients * lag(region10.total_positive, 1) over weeks as from_region10_lag1
+        ) as flu_tests
     from covid.patients
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 1') as region1 using (date)
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 2') as region2 using (date)
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 3') as region3 using (date)
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 4') as region4 using (date)
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 5') as region5 using (date)
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 6') as region6 using (date)
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 7') as region7 using (date)
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 8') as region8 using (date)
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 9') as region9 using (date)
-    join (select date, rate(total_positive, total_specimens) as positive_per_specimen from covid.tests where region = 'Region 10') as region10 using (date)
+    join covid.tests using (date, region)
+    join (select date, total_positive from covid.tests where region = 'Region 1') as region1 using (date)
+    join (select date, total_positive from covid.tests where region = 'Region 2') as region2 using (date)
+    join (select date, total_positive from covid.tests where region = 'Region 3') as region3 using (date)
+    join (select date, total_positive from covid.tests where region = 'Region 4') as region4 using (date)
+    join (select date, total_positive from covid.tests where region = 'Region 5') as region5 using (date)
+    join (select date, total_positive from covid.tests where region = 'Region 6') as region6 using (date)
+    join (select date, total_positive from covid.tests where region = 'Region 7') as region7 using (date)
+    join (select date, total_positive from covid.tests where region = 'Region 8') as region8 using (date)
+    join (select date, total_positive from covid.tests where region = 'Region 9') as region9 using (date)
+    join (select date, total_positive from covid.tests where region = 'Region 10') as region10 using (date)
     window weeks as (partition by region order by date)
 )
 select 
     date,
     region,
+    total_specimens,
+    total_positive,
     total_patients,
     -- Dependent variable
     ili_total,
@@ -301,16 +311,16 @@ select
     if(region = 'Region 8', seasonal_trend, null) as seasonal_trend_to_region8,
     if(region = 'Region 9', seasonal_trend, null) as seasonal_trend_to_region9,
     if(region = 'Region 10', seasonal_trend, null) as seasonal_trend_to_region10,
-    if(region = 'Region 1', positive_per_specimen, null) as positive_per_specimen_to_region1,
-    if(region = 'Region 2', positive_per_specimen, null) as positive_per_specimen_to_region2,
-    if(region = 'Region 3', positive_per_specimen, null) as positive_per_specimen_to_region3,
-    if(region = 'Region 4', positive_per_specimen, null) as positive_per_specimen_to_region4,
-    if(region = 'Region 5', positive_per_specimen, null) as positive_per_specimen_to_region5,
-    if(region = 'Region 6', positive_per_specimen, null) as positive_per_specimen_to_region6,
-    if(region = 'Region 7', positive_per_specimen, null) as positive_per_specimen_to_region7,
-    if(region = 'Region 8', positive_per_specimen, null) as positive_per_specimen_to_region8,
-    if(region = 'Region 9', positive_per_specimen, null) as positive_per_specimen_to_region9,
-    if(region = 'Region 10', positive_per_specimen, null) as positive_per_specimen_to_region10
+    if(region = 'Region 1', flu_tests, null) as flu_tests_to_region1,
+    if(region = 'Region 2', flu_tests, null) as flu_tests_to_region2,
+    if(region = 'Region 3', flu_tests, null) as flu_tests_to_region3,
+    if(region = 'Region 4', flu_tests, null) as flu_tests_to_region4,
+    if(region = 'Region 5', flu_tests, null) as flu_tests_to_region5,
+    if(region = 'Region 6', flu_tests, null) as flu_tests_to_region6,
+    if(region = 'Region 7', flu_tests, null) as flu_tests_to_region7,
+    if(region = 'Region 8', flu_tests, null) as flu_tests_to_region8,
+    if(region = 'Region 9', flu_tests, null) as flu_tests_to_region9,
+    if(region = 'Region 10', flu_tests, null) as flu_tests_to_region10
 from pivot_input
 order by region, date;
 
@@ -328,20 +338,20 @@ select
     seasonal_trend_to_region8,
     seasonal_trend_to_region9,
     seasonal_trend_to_region10,
-    positive_per_specimen_to_region1,
-    positive_per_specimen_to_region2,
-    positive_per_specimen_to_region3,
-    positive_per_specimen_to_region4,
-    positive_per_specimen_to_region5,
-    positive_per_specimen_to_region6,
-    positive_per_specimen_to_region7,
-    positive_per_specimen_to_region8,
-    positive_per_specimen_to_region9,
-    positive_per_specimen_to_region10
+    flu_tests_to_region1,
+    flu_tests_to_region2,
+    flu_tests_to_region3,
+    flu_tests_to_region4,
+    flu_tests_to_region5,
+    flu_tests_to_region6,
+    flu_tests_to_region7,
+    flu_tests_to_region8,
+    flu_tests_to_region9,
+    flu_tests_to_region10
 from covid.features
-where extract(year from date) < 2020;
+where extract(year from date) not in (2009, 2020);
 
-select date, region, total_patients, ili_total, predicted_ili_total 
+select date, region, total_specimens, total_positive, total_patients, ili_total, predicted_ili_total 
 from ml.predict(model covid.linear_model, (
     select *
     from covid.features
