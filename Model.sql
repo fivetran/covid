@@ -220,19 +220,18 @@ group by 1, 2;
 /*
 Our goal is to fit the model:
 
-ili_per_visit_regionX ~ a * seasonal_trend + b * flu_per_specimen_region1 + c * flu_per_speciment_region2 + ...
-
-ili / visit = a * seasonal_trend + b * flu_per_specimen
-ili = (a * seasonal_trend + b * flu_per_specimen) * visit
-ili = a * seasonal_trend * visit + b * flu_per_speciment * visit
+ili(region) ~ patients(region) * (a * seasonal_trend + b * flu_per_speciment(region1) + c * flu_per_specimen(region2) + ...)
 
 */
 
-create temp function rate(total_positive int64, total_specimens int64) as (
-    case total_specimens when 0 then total_positive else total_positive / total_specimens end
-);
-
 create or replace table covid.features as 
+with rates as (
+    select 
+        date, 
+        region, 
+        case total_specimens when 0 then 0 else total_positive / total_specimens end as positive_per_specimen
+    from covid.tests
+)
 select 
     date, 
     region,
@@ -254,27 +253,67 @@ select
     total_patients * if(extract(month from date) = 11, 1, 0) as month11,
     total_patients * if(extract(month from date) = 12, 1, 0) as month12,
     -- ILI in each region is related to positive test rate from every region.
-    total_patients * rate(tests1.total_positive, tests1.total_specimens) as positive_per_specimen1,
-    total_patients * rate(tests2.total_positive, tests2.total_specimens) as positive_per_specimen2,
-    total_patients * rate(tests3.total_positive, tests3.total_specimens) as positive_per_specimen3,
-    total_patients * rate(tests4.total_positive, tests4.total_specimens) as positive_per_specimen4,
-    total_patients * rate(tests5.total_positive, tests5.total_specimens) as positive_per_specimen5,
-    total_patients * rate(tests6.total_positive, tests6.total_specimens) as positive_per_specimen6,
-    total_patients * rate(tests7.total_positive, tests7.total_specimens) as positive_per_specimen7,
-    total_patients * rate(tests8.total_positive, tests8.total_specimens) as positive_per_specimen8,
-    total_patients * rate(tests9.total_positive, tests9.total_specimens) as positive_per_specimen9,
-    total_patients * rate(tests10.total_positive, tests10.total_specimens) as positive_per_specimen10
+    tests_region1_lag0.positive_per_specimen as positive_per_speciment_region1_lag0,
+    tests_region2_lag0.positive_per_specimen as positive_per_speciment_region2_lag0,
+    tests_region3_lag0.positive_per_specimen as positive_per_speciment_region3_lag0,
+    tests_region4_lag0.positive_per_specimen as positive_per_speciment_region4_lag0,
+    tests_region5_lag0.positive_per_specimen as positive_per_speciment_region5_lag0,
+    tests_region6_lag0.positive_per_specimen as positive_per_speciment_region6_lag0,
+    tests_region7_lag0.positive_per_specimen as positive_per_speciment_region7_lag0,
+    tests_region8_lag0.positive_per_specimen as positive_per_speciment_region8_lag0,
+    tests_region9_lag0.positive_per_specimen as positive_per_speciment_region9_lag0,
+    tests_region10_lag0.positive_per_specimen as positive_per_speciment_region10_lag0,
+    tests_region1_lag1.positive_per_specimen as positive_per_speciment_region1_lag1,
+    tests_region2_lag1.positive_per_specimen as positive_per_speciment_region2_lag1,
+    tests_region3_lag1.positive_per_specimen as positive_per_speciment_region3_lag1,
+    tests_region4_lag1.positive_per_specimen as positive_per_speciment_region4_lag1,
+    tests_region5_lag1.positive_per_specimen as positive_per_speciment_region5_lag1,
+    tests_region6_lag1.positive_per_specimen as positive_per_speciment_region6_lag1,
+    tests_region7_lag1.positive_per_specimen as positive_per_speciment_region7_lag1,
+    tests_region8_lag1.positive_per_specimen as positive_per_speciment_region8_lag1,
+    tests_region9_lag1.positive_per_specimen as positive_per_speciment_region9_lag1,
+    tests_region10_lag1.positive_per_specimen as positive_per_speciment_region10_lag1,
+    tests_region1_lag2.positive_per_specimen as positive_per_speciment_region1_lag2,
+    tests_region2_lag2.positive_per_specimen as positive_per_speciment_region2_lag2,
+    tests_region3_lag2.positive_per_specimen as positive_per_speciment_region3_lag2,
+    tests_region4_lag2.positive_per_specimen as positive_per_speciment_region4_lag2,
+    tests_region5_lag2.positive_per_specimen as positive_per_speciment_region5_lag2,
+    tests_region6_lag2.positive_per_specimen as positive_per_speciment_region6_lag2,
+    tests_region7_lag2.positive_per_specimen as positive_per_speciment_region7_lag2,
+    tests_region8_lag2.positive_per_specimen as positive_per_speciment_region8_lag2,
+    tests_region9_lag2.positive_per_specimen as positive_per_speciment_region9_lag2,
+    tests_region10_lag2.positive_per_specimen as positive_per_speciment_region10_lag2
 from covid.patients 
-join (select * except (region) from covid.tests where region = 'Region 1') as tests1 using (date)
-join (select * except (region) from covid.tests where region = 'Region 2') as tests2 using (date)
-join (select * except (region) from covid.tests where region = 'Region 3') as tests3 using (date)
-join (select * except (region) from covid.tests where region = 'Region 4') as tests4 using (date)
-join (select * except (region) from covid.tests where region = 'Region 5') as tests5 using (date)
-join (select * except (region) from covid.tests where region = 'Region 6') as tests6 using (date)
-join (select * except (region) from covid.tests where region = 'Region 7') as tests7 using (date)
-join (select * except (region) from covid.tests where region = 'Region 8') as tests8 using (date)
-join (select * except (region) from covid.tests where region = 'Region 9') as tests9 using (date)
-join (select * except (region) from covid.tests where region = 'Region 10') as tests10 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 1') as tests_region1_lag0 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 2') as tests_region2_lag0 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 3') as tests_region3_lag0 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 4') as tests_region4_lag0 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 5') as tests_region5_lag0 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 6') as tests_region6_lag0 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 7') as tests_region7_lag0 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 8') as tests_region8_lag0 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 9') as tests_region9_lag0 using (date)
+join (select date, positive_per_specimen from rates where region = 'Region 10') as tests_region10_lag0 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 1') as tests_region1_lag1 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 2') as tests_region2_lag1 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 3') as tests_region3_lag1 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 4') as tests_region4_lag1 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 5') as tests_region5_lag1 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 6') as tests_region6_lag1 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 7') as tests_region7_lag1 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 8') as tests_region8_lag1 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 9') as tests_region9_lag1 using (date)
+join (select lag(date, 1) over (order by date) as date, positive_per_specimen from rates where region = 'Region 10') as tests_region10_lag1 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 1') as tests_region1_lag2 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 2') as tests_region2_lag2 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 3') as tests_region3_lag2 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 4') as tests_region4_lag2 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 5') as tests_region5_lag2 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 6') as tests_region6_lag2 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 7') as tests_region7_lag2 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 8') as tests_region8_lag2 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 9') as tests_region9_lag2 using (date)
+join (select lag(date, 2) over (order by date) as date, positive_per_specimen from rates where region = 'Region 10') as tests_region10_lag2 using (date)
 order by region, date;
 
 create temp function flu_season(exact date) as (
@@ -297,16 +336,36 @@ select
     month10,
     month11,
     month12,
-    positive_per_specimen1,
-    positive_per_specimen2,
-    positive_per_specimen3,
-    positive_per_specimen4,
-    positive_per_specimen5,
-    positive_per_specimen6,
-    positive_per_specimen7,
-    positive_per_specimen8,
-    positive_per_specimen9,
-    positive_per_specimen10
+    positive_per_speciment_region1_lag0,
+    positive_per_speciment_region2_lag0,
+    positive_per_speciment_region3_lag0,
+    positive_per_speciment_region4_lag0,
+    positive_per_speciment_region5_lag0,
+    positive_per_speciment_region6_lag0,
+    positive_per_speciment_region7_lag0,
+    positive_per_speciment_region8_lag0,
+    positive_per_speciment_region9_lag0,
+    positive_per_speciment_region10_lag0,
+    positive_per_speciment_region1_lag1,
+    positive_per_speciment_region2_lag1,
+    positive_per_speciment_region3_lag1,
+    positive_per_speciment_region4_lag1,
+    positive_per_speciment_region5_lag1,
+    positive_per_speciment_region6_lag1,
+    positive_per_speciment_region7_lag1,
+    positive_per_speciment_region8_lag1,
+    positive_per_speciment_region9_lag1,
+    positive_per_speciment_region10_lag1,
+    positive_per_speciment_region1_lag2,
+    positive_per_speciment_region2_lag2,
+    positive_per_speciment_region3_lag2,
+    positive_per_speciment_region4_lag2,
+    positive_per_speciment_region5_lag2,
+    positive_per_speciment_region6_lag2,
+    positive_per_speciment_region7_lag2,
+    positive_per_speciment_region8_lag2,
+    positive_per_speciment_region9_lag2,
+    positive_per_speciment_region10_lag2
 from covid.features
 where region = 'Region 2'
 and flu_season(date) < 2019;
