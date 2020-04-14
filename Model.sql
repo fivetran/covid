@@ -222,6 +222,10 @@ Our goal is to fit the model:
 
 ili_per_visit_regionX ~ a * seasonal_trend + b * flu_per_specimen_region1 + c * flu_per_speciment_region2 + ...
 
+ili / visit = a * seasonal_trend + b * flu_per_specimen
+ili = (a * seasonal_trend + b * flu_per_specimen) * visit
+ili = a * seasonal_trend * visit + b * flu_per_speciment * visit
+
 */
 
 create temp function rate(total_positive int64, total_specimens int64) as (
@@ -232,31 +236,34 @@ create or replace table covid.features as
 select 
     date, 
     region,
-    rate(ili_total, total_patients) as ili_per_patient,
+    num_providers,
+    total_patients,
+    -- Dependent variable.
+    ili_total,
     -- Dummy variable for each month so we can fit seasonal trend.
-    if(extract(month from date) = 1, 1, 0) as month1,
-    if(extract(month from date) = 2, 1, 0) as month2,
-    if(extract(month from date) = 3, 1, 0) as month3,
-    if(extract(month from date) = 4, 1, 0) as month4,
-    if(extract(month from date) = 5, 1, 0) as month5,
-    if(extract(month from date) = 6, 1, 0) as month6,
-    if(extract(month from date) = 7, 1, 0) as month7,
-    if(extract(month from date) = 8, 1, 0) as month8,
-    if(extract(month from date) = 9, 1, 0) as month9,
-    if(extract(month from date) = 10, 1, 0) as month10,
-    if(extract(month from date) = 11, 1, 0) as month11,
-    if(extract(month from date) = 12, 1, 0) as month12,
+    total_patients * if(extract(month from date) = 1, 1, 0) as month1,
+    total_patients * if(extract(month from date) = 2, 1, 0) as month2,
+    total_patients * if(extract(month from date) = 3, 1, 0) as month3,
+    total_patients * if(extract(month from date) = 4, 1, 0) as month4,
+    total_patients * if(extract(month from date) = 5, 1, 0) as month5,
+    total_patients * if(extract(month from date) = 6, 1, 0) as month6,
+    total_patients * if(extract(month from date) = 7, 1, 0) as month7,
+    total_patients * if(extract(month from date) = 8, 1, 0) as month8,
+    total_patients * if(extract(month from date) = 9, 1, 0) as month9,
+    total_patients * if(extract(month from date) = 10, 1, 0) as month10,
+    total_patients * if(extract(month from date) = 11, 1, 0) as month11,
+    total_patients * if(extract(month from date) = 12, 1, 0) as month12,
     -- ILI in each region is related to positive test rate from every region.
-    rate(tests1.total_positive, tests1.total_specimens) as positive_per_specimen1,
-    rate(tests2.total_positive, tests2.total_specimens) as positive_per_specimen2,
-    rate(tests3.total_positive, tests3.total_specimens) as positive_per_specimen3,
-    rate(tests4.total_positive, tests4.total_specimens) as positive_per_specimen4,
-    rate(tests5.total_positive, tests5.total_specimens) as positive_per_specimen5,
-    rate(tests6.total_positive, tests6.total_specimens) as positive_per_specimen6,
-    rate(tests7.total_positive, tests7.total_specimens) as positive_per_specimen7,
-    rate(tests8.total_positive, tests8.total_specimens) as positive_per_specimen8,
-    rate(tests9.total_positive, tests9.total_specimens) as positive_per_specimen9,
-    rate(tests10.total_positive, tests10.total_specimens) as positive_per_specimen10
+    total_patients * rate(tests1.total_positive, tests1.total_specimens) as positive_per_specimen1,
+    total_patients * rate(tests2.total_positive, tests2.total_specimens) as positive_per_specimen2,
+    total_patients * rate(tests3.total_positive, tests3.total_specimens) as positive_per_specimen3,
+    total_patients * rate(tests4.total_positive, tests4.total_specimens) as positive_per_specimen4,
+    total_patients * rate(tests5.total_positive, tests5.total_specimens) as positive_per_specimen5,
+    total_patients * rate(tests6.total_positive, tests6.total_specimens) as positive_per_specimen6,
+    total_patients * rate(tests7.total_positive, tests7.total_specimens) as positive_per_specimen7,
+    total_patients * rate(tests8.total_positive, tests8.total_specimens) as positive_per_specimen8,
+    total_patients * rate(tests9.total_positive, tests9.total_specimens) as positive_per_specimen9,
+    total_patients * rate(tests10.total_positive, tests10.total_specimens) as positive_per_specimen10
 from covid.patients 
 join (select * except (region) from covid.tests where region = 'Region 1') as tests1 using (date)
 join (select * except (region) from covid.tests where region = 'Region 2') as tests2 using (date)
@@ -275,8 +282,31 @@ create temp function flu_season(exact date) as (
 );
 
 create or replace model covid.linear_model
-options (model_type = 'linear_reg', input_label_cols = ['ili_per_patient']) as
-select * except (date, region)
+options (model_type = 'linear_reg', input_label_cols = ['ili_total']) as
+select
+    ili_total,
+    month1,
+    month2,
+    month3,
+    month4,
+    month5,
+    month6,
+    month7,
+    month8,
+    month9,
+    month10,
+    month11,
+    month12,
+    positive_per_specimen1,
+    positive_per_specimen2,
+    positive_per_specimen3,
+    positive_per_specimen4,
+    positive_per_specimen5,
+    positive_per_specimen6,
+    positive_per_specimen7,
+    positive_per_specimen8,
+    positive_per_specimen9,
+    positive_per_specimen10
 from covid.features
 where region = 'Region 2'
 and flu_season(date) < 2019;
