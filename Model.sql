@@ -232,6 +232,36 @@ ili_total ~ total_patients * seasonal_trend + total_patients * a * total_positiv
 
 */
 
+create temp function seasonal_trend_0() as (
+    struct(
+        0 as month1,
+        0 as month2,
+        0 as month3,
+        0 as month4,
+        0 as month5,
+        0 as month6,
+        0 as month7,
+        0 as month8,
+        0 as month9,
+        0 as month10,
+        0 as month11,
+        0 as month12
+    )
+);
+create temp function flu_tests_zero() as (
+    struct(
+        0 as from_region1,
+        0 as from_region2,
+        0 as from_region3,
+        0 as from_region4,
+        0 as from_region5,
+        0 as from_region6,
+        0 as from_region7,
+        0 as from_region8,
+        0 as from_region9,
+        0 as from_region10
+    )
+);
 create or replace table covid.features as 
 with pivot_input as (
     select
@@ -256,27 +286,16 @@ with pivot_input as (
             total_patients * if(extract(month from date) = 12, 1, 0) as month12
         ) as seasonal_trend,
         struct (
-            total_patients * region1.total_positive as from_region1_lag0,
-            total_patients * region2.total_positive as from_region2_lag0,
-            total_patients * region3.total_positive as from_region3_lag0,
-            total_patients * region4.total_positive as from_region4_lag0,
-            total_patients * region5.total_positive as from_region5_lag0,
-            total_patients * region6.total_positive as from_region6_lag0,
-            total_patients * region7.total_positive as from_region7_lag0,
-            total_patients * region8.total_positive as from_region8_lag0,
-            total_patients * region9.total_positive as from_region9_lag0,
-            total_patients * region10.total_positive as from_region10_lag0,
-
-            total_patients * lag(region1.total_positive, 1) over weeks as from_region1_lag1,
-            total_patients * lag(region2.total_positive, 1) over weeks as from_region2_lag1,
-            total_patients * lag(region3.total_positive, 1) over weeks as from_region3_lag1,
-            total_patients * lag(region4.total_positive, 1) over weeks as from_region4_lag1,
-            total_patients * lag(region5.total_positive, 1) over weeks as from_region5_lag1,
-            total_patients * lag(region6.total_positive, 1) over weeks as from_region6_lag1,
-            total_patients * lag(region7.total_positive, 1) over weeks as from_region7_lag1,
-            total_patients * lag(region8.total_positive, 1) over weeks as from_region8_lag1,
-            total_patients * lag(region9.total_positive, 1) over weeks as from_region9_lag1,
-            total_patients * lag(region10.total_positive, 1) over weeks as from_region10_lag1
+            total_patients * region1.total_positive as from_region1,
+            total_patients * region2.total_positive as from_region2,
+            total_patients * region3.total_positive as from_region3,
+            total_patients * region4.total_positive as from_region4,
+            total_patients * region5.total_positive as from_region5,
+            total_patients * region6.total_positive as from_region6,
+            total_patients * region7.total_positive as from_region7,
+            total_patients * region8.total_positive as from_region8,
+            total_patients * region9.total_positive as from_region9,
+            total_patients * region10.total_positive as from_region10
         ) as flu_tests
     from covid.patients
     join covid.tests using (date, region)
@@ -290,7 +309,7 @@ with pivot_input as (
     join (select date, total_positive from covid.tests where region = 'Region 8') as region8 using (date)
     join (select date, total_positive from covid.tests where region = 'Region 9') as region9 using (date)
     join (select date, total_positive from covid.tests where region = 'Region 10') as region10 using (date)
-    window weeks as (partition by region order by date)
+    window recent as (partition by region order by date rows between 3 preceding and current row)
 )
 select 
     date,
@@ -298,29 +317,41 @@ select
     total_specimens,
     total_positive,
     total_patients,
-    -- Dependent variable
+    -- dependent variable
     ili_total,
-    -- Independent variables
-    if(region = 'Region 1', seasonal_trend, null) as seasonal_trend_to_region1,
-    if(region = 'Region 2', seasonal_trend, null) as seasonal_trend_to_region2,
-    if(region = 'Region 3', seasonal_trend, null) as seasonal_trend_to_region3,
-    if(region = 'Region 4', seasonal_trend, null) as seasonal_trend_to_region4,
-    if(region = 'Region 5', seasonal_trend, null) as seasonal_trend_to_region5,
-    if(region = 'Region 6', seasonal_trend, null) as seasonal_trend_to_region6,
-    if(region = 'Region 7', seasonal_trend, null) as seasonal_trend_to_region7,
-    if(region = 'Region 8', seasonal_trend, null) as seasonal_trend_to_region8,
-    if(region = 'Region 9', seasonal_trend, null) as seasonal_trend_to_region9,
-    if(region = 'Region 10', seasonal_trend, null) as seasonal_trend_to_region10,
-    if(region = 'Region 1', flu_tests, null) as flu_tests_to_region1,
-    if(region = 'Region 2', flu_tests, null) as flu_tests_to_region2,
-    if(region = 'Region 3', flu_tests, null) as flu_tests_to_region3,
-    if(region = 'Region 4', flu_tests, null) as flu_tests_to_region4,
-    if(region = 'Region 5', flu_tests, null) as flu_tests_to_region5,
-    if(region = 'Region 6', flu_tests, null) as flu_tests_to_region6,
-    if(region = 'Region 7', flu_tests, null) as flu_tests_to_region7,
-    if(region = 'Region 8', flu_tests, null) as flu_tests_to_region8,
-    if(region = 'Region 9', flu_tests, null) as flu_tests_to_region9,
-    if(region = 'Region 10', flu_tests, null) as flu_tests_to_region10
+    -- independent variables, seasonal trend
+    if(region = 'Region 1', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region1,
+    if(region = 'Region 2', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region2,
+    if(region = 'Region 3', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region3,
+    if(region = 'Region 4', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region4,
+    if(region = 'Region 5', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region5,
+    if(region = 'Region 6', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region6,
+    if(region = 'Region 7', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region7,
+    if(region = 'Region 8', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region8,
+    if(region = 'Region 9', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region9,
+    if(region = 'Region 10', seasonal_trend, seasonal_trend_0()) as seasonal_trend_to_region10,
+    -- independent variables, region-to-region dependencies
+    if(region = 'Region 1', flu_tests, flu_tests_zero()) as flu_tests_to_region1,
+    if(region = 'Region 2', flu_tests, flu_tests_zero()) as flu_tests_to_region2,
+    if(region = 'Region 3', flu_tests, flu_tests_zero()) as flu_tests_to_region3,
+    if(region = 'Region 4', flu_tests, flu_tests_zero()) as flu_tests_to_region4,
+    if(region = 'Region 5', flu_tests, flu_tests_zero()) as flu_tests_to_region5,
+    if(region = 'Region 6', flu_tests, flu_tests_zero()) as flu_tests_to_region6,
+    if(region = 'Region 7', flu_tests, flu_tests_zero()) as flu_tests_to_region7,
+    if(region = 'Region 8', flu_tests, flu_tests_zero()) as flu_tests_to_region8,
+    if(region = 'Region 9', flu_tests, flu_tests_zero()) as flu_tests_to_region9,
+    if(region = 'Region 10', flu_tests, flu_tests_zero()) as flu_tests_to_region10,
+    -- dummy variables so each region can have its own y-intercent
+    if(region = 'Region 1', 1, 0) as intercept_region1,
+    if(region = 'Region 2', 1, 0) as intercept_region2,
+    if(region = 'Region 3', 1, 0) as intercept_region3,
+    if(region = 'Region 4', 1, 0) as intercept_region4,
+    if(region = 'Region 5', 1, 0) as intercept_region5,
+    if(region = 'Region 6', 1, 0) as intercept_region6,
+    if(region = 'Region 7', 1, 0) as intercept_region7,
+    if(region = 'Region 8', 1, 0) as intercept_region8,
+    if(region = 'Region 9', 1, 0) as intercept_region9,
+    -- last dummy is blank, global intercept takes that role
 from pivot_input
 order by region, date;
 
