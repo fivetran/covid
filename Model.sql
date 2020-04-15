@@ -211,16 +211,18 @@ with infer_2020_population as (
     -- 2020 population isn't available yet, so use 2019 population
     select year, state, population from covid.census_population
     union all select 2020 as year, state, population from covid.census_population where year = 2019
+), sum_by_region as (
+    select year, region, sum(population) as population
+    from infer_2020_population
+    join covid.hhs_regions using (state)
+    group by 1, 2
 )
-select year, region, sum(population) as population
-from infer_2020_population
-join covid.hhs_regions using (state)
-group by 1, 2;
+select date, region, population
+from covid.cdc_dates 
+join sum_by_region on extract(year from cdc_dates.date) = sum_by_region.year
+order by region, date;
 
-/*
-fit ili_rate ~ seasonal_trend + b * flu_positive_rate
-*/
-
+-- Fit the model ili_rate ~ seasonal_trend + b * flu_positive_rate
 create temp function rate(x int64, y int64) as (
     case y when 0 then 0 else x / y end
 );
@@ -232,11 +234,15 @@ select
     sum(num_providers) as num_providers,
     sum(total_patients) as total_patients,
     sum(ili_total) as ili_total,
+    sum(population) as population,
+    -- TODO normalize by population instead of # patients
     rate(sum(ili_total), sum(total_patients)) as ili_per_patient,
+    -- TODO normalize by population instead of # specimens
     rate(sum(total_positive), sum(total_specimens)) as positive_per_specimen,
     format('Month %d', extract(month from date)) as seasonal_trend,
 from covid.patients
 join covid.tests using (date, region)
+join covid.census_population_by_region using (date, region)
 group by date
 order by date;
 
@@ -246,6 +252,50 @@ select ili_per_patient, positive_per_specimen, seasonal_trend
 from covid.features
 where extract(year from date) <> 2020;
 
+-- Evaluate the model for making charts.
 select * except (ili_per_patient, positive_per_specimen, seasonal_trend, predicted_ili_per_patient), predicted_ili_per_patient * total_patients as predicted_ili
 from ml.predict(model covid.national_model, table covid.features);
 
+-- Variables to use in extrapolating COVID cases from ILI data.
+declare dr_visits_per_week, ili_baseline, h1n1_visits, h1n1_cases, detection_ratio, confidence_interval float64;
+
+-- How many times does the average American visit a primary-care provider each week?
+-- We use the numbers from the CDC's web site https://www.cdc.gov/nchs/fastats/physician-visits.htm
+-- We assume that the number of visits per week is constant over the year.
+-- This is a bit surprising, but it appears to be true based on the visits / week of providers in ILINet.
+set dr_visits_per_week = 277.9 * .545 / 100 / 52;
+
+-- The baseline % of patients with ILI during the summer when little flu is present.
+set ili_baseline = .01;
+
+-- How many Americans with H1N1 visited a primary care provider in the 2009-2010 pandemic?
+set h1n1_visits = (
+    select sum((ili_per_patient - ili_baseline) * dr_visits_per_week * population) 
+    from covid.features 
+    where date between '2009-04-12' and '2010-04-10'
+);
+
+-- CDC estimate of how many Americans had H1N1 in the 2009-2010 pandemic.
+-- https://www.cdc.gov/flu/pandemic-resources/2009-h1n1-pandemic.html
+set h1n1_cases = 60.8 * 1000 * 1000;
+
+-- What % of Americans with H1N1 visited their doctor?
+-- We will assume the same % of Americans with COVID visit their doctor.
+set detection_ratio = h1n1_visits / h1n1_cases;
+
+-- 95% confidence interval for predicted ILI.
+-- We'll use this to calculate "excess ILI", which is our estimate of how many people with COVID are visiting a PCP.
+set confidence_interval = (select 2*mean_absolute_error from ml.evaluate(model covid.national_model));
+
+select 
+    date,
+    ili_per_patient,
+    predicted_ili_per_patient,
+    predicted_ili_per_patient + confidence_interval as excess_ili_threshold,
+    dr_visits_per_week,
+    population,
+    detection_ratio,
+    (ili_per_patient - predicted_ili_per_patient - confidence_interval) * dr_visits_per_week * population / detection_ratio as excess_ili
+from ml.predict(model covid.national_model, table covid.features)
+where date > '2020-03-01'
+order by date;
