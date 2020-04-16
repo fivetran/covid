@@ -182,9 +182,9 @@ create or replace table covid.patients as
 select 
     date, 
     region, 
-    sum(ili_total) as ili_total, 
     sum(num_providers) as num_providers, 
-    sum(total_patients) as total_patients
+    sum(total_patients) as total_patients,
+    sum(ili_total) as ili_total
 from covid.ilinet_visits
 join covid.cdc_dates using (year, week)
 group by region, date
@@ -235,15 +235,17 @@ select
     sum(total_patients) as total_patients,
     sum(ili_total) as ili_total,
     sum(population) as population,
-    -- TODO normalize by population instead of # patients
-    rate(sum(ili_total), sum(total_patients)) as ili_per_patient,
-    -- TODO normalize by population instead of # specimens
-    rate(sum(total_positive), sum(total_specimens)) as positive_per_specimen,
+    -- Population-weighted average of % of patients visiting primary care providers with ILI.
+    sum(rate(ili_total, total_patients) * population) / sum(population) as ili_per_patient,
+    -- Population-weighted average of % of specimens that test positive for flu.
+    sum(rate(total_positive, total_specimens) * population) / sum(population) as positive_per_specimen,
+    -- Categorical variable for seasonal trend.
     format('Month %d', extract(month from date)) as seasonal_trend,
 from covid.patients
 join covid.tests using (date, region)
 join covid.census_population_by_region using (date, region)
 group by date
+having num_providers > 0
 order by date;
 
 create or replace model covid.national_model
@@ -251,10 +253,6 @@ options (model_type = 'linear_reg', input_label_cols = ['ili_per_patient']) as
 select ili_per_patient, positive_per_specimen, seasonal_trend
 from covid.features
 where extract(year from date) <> 2020;
-
--- Evaluate the model for making charts.
-select * except (ili_per_patient, positive_per_specimen, seasonal_trend, predicted_ili_per_patient), predicted_ili_per_patient * total_patients as predicted_ili
-from ml.predict(model covid.national_model, table covid.features);
 
 -- Variables to use in extrapolating COVID cases from ILI data.
 declare dr_visits_per_week, ili_baseline, h1n1_visits, h1n1_cases, detection_ratio, confidence_interval float64;
@@ -287,6 +285,7 @@ set detection_ratio = h1n1_visits / h1n1_cases;
 -- We'll use this to calculate "excess ILI", which is our estimate of how many people with COVID are visiting a PCP.
 set confidence_interval = (select 2*mean_absolute_error from ml.evaluate(model covid.national_model));
 
+-- Estimate the total number of cases.
 select 
     date,
     ili_per_patient,
@@ -297,5 +296,9 @@ select
     detection_ratio,
     (ili_per_patient - predicted_ili_per_patient - confidence_interval) * dr_visits_per_week * population / detection_ratio as excess_ili
 from ml.predict(model covid.national_model, table covid.features)
-where date > '2020-03-01'
+where date >= '2020-03-01'
 order by date;
+
+-- Evaluate the model for making charts.
+select * except (seasonal_trend)
+from ml.predict(model covid.national_model, table covid.features);
