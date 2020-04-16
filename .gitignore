@@ -1,2 +1,4 @@
 ~$*.xlsx
+.~*.twbr
+.DS_Store
 X.Scratch.sql
