@@ -14,7 +14,7 @@ set ili_baseline = .01;
 -- How many Americans with H1N1 visited a primary care provider in the 2009-2010 pandemic?
 set h1n1_visits = (
     select sum((ili_per_patient - ili_baseline) * dr_visits_per_week * population) 
-    from covid.features 
+    from `fivetran-covid.covid.features` 
     where date between '2009-04-12' and '2010-04-10'
 );
 
@@ -28,7 +28,7 @@ set detection_ratio = h1n1_visits / h1n1_cases;
 
 -- 95% confidence interval for predicted ILI.
 -- We'll use this to calculate "excess ILI", which is our estimate of how many people with COVID are visiting a PCP.
-set confidence_interval = (select 2*mean_absolute_error from ml.evaluate(model covid.national_model));
+set confidence_interval = (select 2*mean_absolute_error from ml.evaluate(model `fivetran-covid.covid.national_model`));
 
 -- Estimate the total number of cases.
 select 
@@ -42,10 +42,10 @@ select
     cases,
     deaths,
     (ili_per_patient - predicted_ili_per_patient - confidence_interval) as excess_ili
-from ml.predict(model covid.national_model, table covid.features)
+from ml.predict(model `fivetran-covid.covid.national_model`, table `fivetran-covid.covid.features`)
 where date >= '2020-03-01'
 order by date;
 
 -- Evaluate the model for making charts.
 select * except (seasonal_trend)
-from ml.predict(model covid.national_model, table covid.features);
+from ml.predict(model `fivetran-covid.covid.national_model`, table `fivetran-covid.covid.features`);
