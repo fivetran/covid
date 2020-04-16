@@ -1,12 +1,21 @@
 
 -- Variables to use in extrapolating COVID cases from ILI data.
-declare dr_visits_per_week, ili_baseline, h1n1_visits, h1n1_cases, detection_ratio, confidence_interval float64;
+declare dr_visits_per_week, normal_patients_per_provider, ili_baseline, h1n1_visits, h1n1_cases, detection_ratio, confidence_interval float64;
 
 -- How many times does the average American visit a primary-care provider each week?
 -- We use the numbers from the CDC's web site https://www.cdc.gov/nchs/fastats/physician-visits.htm
 -- We assume that the number of visits per week is constant over the year.
 -- This is a bit surprising, but it appears to be true based on the visits / week of providers in ILINet.
 set dr_visits_per_week = 277.9 * .545 / 100 / 52;
+
+-- Fewer patients are seeing their doctor per week than normal.
+-- Calculate the baseline so later we can correct for this.
+set normal_patients_per_provider = (
+    select avg(total_patients / num_providers) 
+    from `fivetran-covid.covid.features` 
+    -- October appears to be the time of year when the CDC adds a bunch of new providers to the network for the upcoming flu season.
+    where date between '2019-10-01' and '2020-02-29'
+);
 
 -- The baseline % of patients with ILI during the summer when little flu is present.
 set ili_baseline = .01;
@@ -36,7 +45,7 @@ select
     ili_per_patient,
     predicted_ili_per_patient,
     predicted_ili_per_patient + confidence_interval as excess_ili_threshold,
-    dr_visits_per_week,
+    dr_visits_per_week * total_patients / num_providers / normal_patients_per_provider,
     population,
     detection_ratio,
     cases,
