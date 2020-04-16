@@ -39,7 +39,9 @@ select
     dr_visits_per_week,
     population,
     detection_ratio,
-    (ili_per_patient - predicted_ili_per_patient - confidence_interval) * dr_visits_per_week * population / detection_ratio as excess_ili
+    cases,
+    deaths,
+    (ili_per_patient - predicted_ili_per_patient - confidence_interval) as excess_ili
 from ml.predict(model covid.national_model, table covid.features)
 where date >= '2020-03-01'
 order by date;
