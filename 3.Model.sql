@@ -11,6 +11,8 @@ select
     sum(total_patients) as total_patients,
     sum(ili_total) as ili_total,
     sum(population) as population,
+    coalesce(sum(cases), 0) as cases,
+    coalesce(sum(deaths), 0) as deaths,
     -- Population-weighted average of % of patients visiting primary care providers with ILI.
     sum(rate(ili_total, total_patients) * population) / sum(population) as ili_per_patient,
     -- Population-weighted average of % of specimens that test positive for flu.
@@ -20,6 +22,7 @@ select
 from covid.patients
 join covid.tests using (date, region)
 join covid.census_population_by_region using (date, region)
+left join covid.new_cases_by_region using (date, region)
 group by date
 having num_providers > 0
 order by date;
