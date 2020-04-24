@@ -14,17 +14,17 @@ create or replace table covid.ilinet_visits (
     -- %UNWEIGHTED ILI
     unweighted_ili string,
     -- AGE 0-4
-    age_0_4 string,
+    age_0_4 int64,
     -- AGE 25-49
-    age_25_29 string,
+    age_25_49 int64,
     -- AGE 25-64
-    age_25_64 string,
+    age_25_64 int64,
     -- AGE 5-24
-    age_5_24 string,
+    age_5_24 int64,
     -- AGE 50-64
-    age_50_64 string,
+    age_50_64 int64,
     -- AGE 65
-    age_65 string,
+    age_65 int64,
     -- ILITOTAL
     ili_total int64,
     -- NUM. OF PROVIDERS
@@ -135,7 +135,7 @@ create or replace table covid.hhs_regions (
 );
 
 /*
-bq --project_id fivetran-covid load --skip_leading_rows 2 --null_marker 'X' covid.ilinet_visits './data/ILINet.csv'
+bq --project_id fivetran-covid load --skip_leading_rows 2 covid.ilinet_visits './data/ILINet.csv'
 bq --project_id fivetran-covid load --skip_leading_rows 2 --null_marker 'X' covid.clinical_labs './data/WHO_NREVSS_Clinical_Labs.csv'
 bq --project_id fivetran-covid load --skip_leading_rows 2 --null_marker 'X' covid.public_health_labs './data/WHO_NREVSS_Public_Health_Labs.csv'
 bq --project_id fivetran-covid load --skip_leading_rows 2 --null_marker 'X' covid.combined_labs './data/WHO_NREVSS_Combined_prior_to_2015_16.csv'
