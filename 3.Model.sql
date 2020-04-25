@@ -32,6 +32,6 @@ from covid.features
 where extract(year from date) <> 2020;
 
 -- Evaluate the model for making charts.
-create or replace table covid.prediction
+create or replace table covid.prediction as
 select *
 from ml.predict(model `fivetran-covid.covid.national_model`, table `fivetran-covid.covid.features`);
