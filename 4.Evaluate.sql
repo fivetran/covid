@@ -27,16 +27,22 @@ set h1n1_cases = 60.8 * 1000 * 1000;
 set detection_ratio = h1n1_visits / h1n1_cases;
 
 -- Estimate the total number of cases.
+with extrapolate as (
+    select *, (ili_per_patient - predicted_ili_per_patient) * dr_visits_per_week * population / detection_ratio as infected
+    from ml.predict(model `fivetran-covid.covid.national_model`, table `fivetran-covid.covid.features`)
+    where date >= '2020-03-01'
+)
 select 
     date,
     region,
     ili_per_patient,
     predicted_ili_per_patient,
-    dr_visits_per_week,
     population,
-    detection_ratio,
     cases,
-    deaths
-from ml.predict(model `fivetran-covid.covid.national_model`, table `fivetran-covid.covid.features`)
-where date >= '2020-03-01'
+    deaths,
+    infected,
+    sum(infected) over regions as total_infected,
+    sum(cases) over regions as total_cases
+from extrapolate
+window regions as (partition by region order by date rows unbounded preceding)
 order by region, date;
