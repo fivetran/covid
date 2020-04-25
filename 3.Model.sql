@@ -8,6 +8,8 @@ select
     num_providers,
     total_patients,
     ili_total,
+    ili_under_25,
+    ili_over_25,
     population,
     coalesce(cases, 0) as cases,
     coalesce(deaths, 0) as deaths,

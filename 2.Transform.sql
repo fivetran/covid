@@ -39,7 +39,9 @@ select
     region, 
     sum(num_providers) as num_providers, 
     sum(total_patients) as total_patients,
-    sum(ili_total) as ili_total
+    sum(ili_total) as ili_total,
+    sum(coalesce(age_0_4, 0) + coalesce(age_5_24, 0)) as ili_under_25,
+    sum(coalesce(age_25_49, 0) + coalesce(age_25_64, 0) + coalesce(age_50_64, 0) + coalesce(age_65, 0)) as ili_over_25
 from covid.ilinet_visits
 join covid.cdc_dates using (year, week)
 group by region, date
